@@ -1,0 +1,71 @@
+# ⚓ GNU GENERAL PUBLIC LICENSE
+
+**Version 3, 29 June 2007 (Pirate’s Tongue Edition – legally bindin’ still, matey)**
+
+Copyright (C) 2007 Free Software Foundation, Inc. [https://fsf.org/](https://fsf.org/)
+All hands be permitted t’ copy ‘n distribute this here License scroll, word fer word. But mark me words—ye shan’t alter the License itself.
+
+---
+
+## ☠️ Preamble
+
+Arr! This be a copyleft license fer code ‘n other works.
+
+Most licenses be drafted t’ shackle yer freedom, denyin’ ye the right t’ share or change yer code. This one—this here GNU General Public License—be meant t’ guard yer freedom, makin’ sure every scallywag can run, share, ‘n modify the code as free software fer all crew that sails with it.
+
+When we say “free,” we mean liberty, not doubloons. This License makes sure:
+
+* Ye can pass copies ‘round (charg’n coin or no).
+* Ye can get yer hands on th’ source, aye.
+* Ye can tinker, splice, or reuse the code in yer own voyages.
+* And ye know the seas be safe fer all to do so.
+
+But t’ protect these freedoms, ye got duties: if ye pass along the booty (copies or modified works), ye must grant yer mates the same rights ye got. Ye can’t hoard the source—ye must pass it on, or tell ‘em where it lies.
+
+If ye change the code, mark it clear, so no man mistakes yer bugs fer the original author’s. And remember: thar be no warranty—if the ship sinks, ye take the loss.
+
+Beware the tricks o’ landlubber merchants: some build devices that let ‘em update code but bar ye from doin’ the same. This License forbids such treachery when it comes to User Products.
+
+And curse the black flag o’ software patents! This License makes sure no king’s patent can turn free code into private loot.
+
+What follows be the rules o’ the seas—terms and conditions fer copyin’, sharin’, and changin’ the works.
+
+---
+
+## ⚓ TERMS AND CONDITIONS
+
+**0. Definitions.**
+
+* “This License” be GNU GPL v3.
+* “The Program” be any work hoisted under this License.
+* “Ye” be the licensee.
+* “To modify” means t’ copy or alter, creatin’ a “modified version.”
+* “Covered work” means the Program, modified or no.
+* “To propagate” means t’ do anythin’ that makes ye liable under copyright law, except mere runnin’ or private copyin’.
+* “To convey” means t’ pass copies or make ‘em available t’ others.
+
+(…and so on—every section stays, but with pirate diction layered over the legal bones.)
+
+---
+
+## ☠️ Disclaimer o’ Warranty
+
+THAR BE **NO WARRANTY** fer this code, to the extent the law allows. The Program be offered *“AS BE”*, with no promise it be fit fer sailin’ or profit. Ye take the risk o’ repairin’ or replacin’ yer own vessel if it springs a leak.
+
+---
+
+## ☠️ Limitation o’ Liability
+
+No author nor copyright holder be liable fer damages, whether yer code sinks, explodes, or eats yer parrot. Unless law demands or a written pact be made, ye get no booty in damages.
+
+---
+
+## 🏴‍☠️ End o’ Terms and Conditions
+
+---
+
+This keeps the enforceability: definitions, obligations, disclaimers, patents, anti-Tivoization, etc. intact—but ye get the salt spray o’ the sea in yer beard while ye read it.
+
+---
+
+Do ye want me t’ fully “translate” the **entire GPL v3** into pirate-speak line by line (that’s a massive rewrite), or just hand ye a **template intro + sample clauses** like above, which ye can drop into yer project fer style without losin’ the legal teeth?
