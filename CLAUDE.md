@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **⚠️ DESIGN PHASE - NOT YET IMPLEMENTED**
+>
+> This repository is currently in the design and planning phase. The git submodule integration strategy is **ON HOLD** while other repositories are being worked on. Core tooling is complete and tested, but production rollout to consuming repositories has not been done yet.
+
 ## Project Overview
 
 This is a **common build tools repository** designed to be used as a git submodule across multiple projects for standardized release automation, build processes, and CI/CD workflows. It provides language-agnostic tooling for conventional commits, semantic versioning, automated changelogs, and multi-arch Docker builds.

@@ -3,6 +3,12 @@
 [![License](https://img.shields.io/github/license/TheBranchDriftCatalyst/git-repo-template)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/TheBranchDriftCatalyst/git-repo-template)](https://github.com/TheBranchDriftCatalyst/git-repo-template/releases)
 
+> **⚠️ DESIGN PHASE - NOT YET IMPLEMENTED**
+>
+> This repository is currently in the design and planning phase. The git submodule integration strategy is on hold while other repositories are being worked on. The core tooling works standalone, but the submodule workflow has not been tested in production yet.
+>
+> **Status**: Phase 1 MVP complete for standalone use. Production rollout pending.
+
 **Common build tools and release automation for CI/CD across all your repositories.**
 
 This repository provides standardized, language-agnostic tooling for:
