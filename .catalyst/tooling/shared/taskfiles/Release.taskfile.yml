@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  release:
+    desc: "Create patch release (alias for release:patch)"
+    cmds:
+      - task: release:patch
+
+  release:patch:
+    desc: "Bump patch version (0.0.X)"
+    cmds:
+      - .catalyst/tooling/shared/scripts/build-release.sh patch
+
+  release:minor:
+    desc: "Bump minor version (0.X.0)"
+    cmds:
+      - .catalyst/tooling/shared/scripts/build-release.sh minor
+
+  release:major:
+    desc: "Bump major version (X.0.0)"
+    cmds:
+      - .catalyst/tooling/shared/scripts/build-release.sh major

@@ -1,0 +1,4 @@
+commit-msg:
+  commands:
+    conventional-commit:
+      run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}

@@ -1,0 +1,7 @@
+# Git hooks managed by lefthook
+# Run: lefthook install
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}

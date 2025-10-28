@@ -1,0 +1,10 @@
+version: '3'
+
+includes:
+  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
+
+tasks:
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
