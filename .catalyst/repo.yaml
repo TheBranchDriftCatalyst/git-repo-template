@@ -3,23 +3,31 @@
 version: "0.1.1"
 # Repository Information
 name: "git-repo-template"
-description: "Generic base git template repository"
+description: "Common build tools and release automation for CI/CD across all repositories"
 repo_url: "https://github.com/TheBranchDriftCatalyst/git-repo-template"
 
 # Repository Status (active, archived, wip, experimental)
-status: "wip"
+status: "active"
 
 # Tech Stack
 tech_stack:
   languages:
-  - "markdown"
+  - "bash"
+  - "yaml"
   frameworks: []
-  tools: []
+  tools:
+  - "git"
+  - "lefthook"
+  - "release-please"
+  - "task"
+  - "docker"
+  - "github-actions"
 
 # Grouping/Categories (for organizing on profile page)
 groups:
+- "build-tools"
+- "devops"
 - "templates"
-- "meta"
 
 # Badge Configuration (optional - will use defaults if not specified)
 badges:
@@ -30,4 +38,8 @@ badges:
 
 # Custom highlights (optional - used for non-AI manual highlights)
 highlights:
-- "Base template for all repositories"
+- "Language-agnostic release automation"
+- "Conventional commits enforcement via git hooks"
+- "Automated changelog generation with release-please"
+- "Multi-arch Docker build support"
+- "Works as git submodule for shared tooling"
