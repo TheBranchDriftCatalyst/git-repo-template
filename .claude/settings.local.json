@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(lefthook version:*)",
+      "Bash(lefthook install:*)",
+      "Bash(task:*)",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "linear"
+  ]
+}
