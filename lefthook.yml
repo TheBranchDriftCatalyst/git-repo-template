@@ -1,7 +1,8 @@
 # Git hooks managed by lefthook
 # Run: lefthook install
+#
+# Extends shared hooks from .catalyst/tooling — add project-specific
+# overrides below (they merge with the shared config).
 
-commit-msg:
-  commands:
-    conventional-commit:
-      run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}
+extends:
+  - .catalyst/tooling/shared/configs/lefthook.yml

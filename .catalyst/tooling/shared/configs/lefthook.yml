@@ -1,4 +1,25 @@
+# Shared lefthook hook definitions
+# Sourced by consuming repos via: extends: .catalyst/tooling/shared/configs/lefthook.yml
+#
+# Hooks defined here are language-agnostic. Repos add project-specific
+# commands (lint-staged, type-check, etc.) in their own lefthook.yml.
+
 commit-msg:
   commands:
     conventional-commit:
       run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}
+
+pre-commit:
+  parallel: true
+  commands:
+    # Consuming repos override/extend this section with lint-staged, formatters, etc.
+    # Example (in repo's lefthook.yml):
+    #   pre-commit:
+    #     commands:
+    #       lint-staged:
+    #         run: npx lint-staged
+
+pre-push:
+  commands:
+    validate-build:
+      run: .catalyst/tooling/shared/scripts/validate-push.sh

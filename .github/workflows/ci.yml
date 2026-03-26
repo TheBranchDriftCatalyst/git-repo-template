@@ -1,0 +1,82 @@
+name: CI
+
+# Template CI workflow — customize per project.
+# Detects project type and runs appropriate checks.
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect Project Type
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.check.outputs.node }}
+      python: ${{ steps.check.outputs.python }}
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          echo "node=$( [ -f package.json ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          echo "python=$( [ -f pyproject.toml ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+          echo "go=$( [ -f go.mod ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
+  node:
+    name: Node.js Checks
+    needs: detect
+    if: needs.detect.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        check: [lint, typecheck, test, build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - if: matrix.check == 'lint'
+        run: yarn lint
+      - if: matrix.check == 'typecheck'
+        run: yarn type-check
+      - if: matrix.check == 'test'
+        run: yarn test:run
+      - if: matrix.check == 'build'
+        run: yarn build
+
+  python:
+    name: Python Checks
+    needs: detect
+    if: needs.detect.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install poetry && poetry install
+      - run: poetry run task lint
+      - run: poetry run task test
+
+  go:
+    name: Go Checks
+    needs: detect
+    if: needs.detect.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./...
