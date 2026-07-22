@@ -8,3 +8,30 @@ tasks:
     desc: "Show available tasks"
     cmds:
       - task --list
+
+  # ─── Bootstrap ───────────────────────────────────────────────
+  # Canonical install entrypoint. Sub-projects extend this — they
+  # should call it from THEIR install task (or list it as a dep) so
+  # `task install` on any repo always installs the pre-commit hooks
+  # alongside the language-specific deps.
+  install:
+    desc: Initial bootstrap — language deps + pre-commit hooks
+    cmds:
+      - task: install:hooks
+
+  install:hooks:
+    desc: Install pre-commit hooks (no-op if .pre-commit-config.yaml absent)
+    silent: true
+    cmds:
+      - |
+        if [ -f .pre-commit-config.yaml ] || [ -f .pre-commit-config.yml ]; then
+          if command -v pre-commit >/dev/null 2>&1; then
+            pre-commit install --install-hooks
+          elif command -v uv >/dev/null 2>&1; then
+            uv tool install pre-commit && pre-commit install --install-hooks
+          elif command -v pipx >/dev/null 2>&1; then
+            pipx install pre-commit && pre-commit install --install-hooks
+          else
+            echo "::WARN:: pre-commit not on PATH and uv/pipx unavailable — skipping hook install" >&2
+          fi
+        fi

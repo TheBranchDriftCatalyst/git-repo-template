@@ -1,0 +1,30 @@
+# Canonical catalyst pre-commit baseline.
+#
+# Hygiene-only by default — no opinionated linters or formatters here.
+# Per-language tools (ruff, eslint, prettier, etc.) belong in the repo's
+# own config, added on top of this baseline as the project warrants.
+#
+# Bootstrap from a fresh clone:
+#   task install           # the install task runs `pre-commit install`
+#                          # for you, idempotent
+# or manually:
+#   pre-commit install --install-hooks
+#
+# Alternative: repos that prefer lefthook (Go-based, faster startup,
+# better parallel execution) should drop this file and use a
+# lefthook.yml instead. The swarm agent's bootstrap step detects both
+# frameworks and runs the right install command.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]   # allow custom tags used by k8s manifests
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
