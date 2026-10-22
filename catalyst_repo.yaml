@@ -1,18 +1,52 @@
 # Catalyst repo descriptor — drives the operator cockpit + profile generator.
+#
+# This path is load-bearing. catalyst-operator's loader
+# (packages/catalyst-repo/src/catalyst_repo/loader.py) resolves
+# MANIFEST_FILENAME = "catalyst_repo.yaml" at the REPO ROOT only, with no
+# upward walk, and writes back to the same path. Do not move or rename it,
+# and do not keep a second copy under .catalyst/ — nothing reads that one.
 version: "0.1.1"
 name: "git-repo-template"
-description: ""
+description: "Nix-provisioned base git template: dev shell, hooks, release automation, CI"
 repo_url: "git@github.com:TheBranchDriftCatalyst/git-repo-template.git"
 
 # Repository Status
-status: "active"  # Options: active, archived, wip, experimental
+status: "active" # Options: active, archived, wip, experimental
 
 # Grouping / Categories (for organizing on profile page)
 groups:
-  []
+  - "build-tools"
+  - "devops"
+  - "templates"
 
 # Tech stack (auto-detected from package.json / pyproject.toml; supplement here)
 tech_stack:
-  languages: []
+  languages:
+    - "nix"
+    - "bash"
+    - "yaml"
   frameworks: []
-  tools: []
+  tools:
+    - "nix"
+    - "direnv"
+    - "git"
+    - "lefthook"
+    - "release-please"
+    - "git-cliff"
+    - "task"
+    - "just"
+    - "tilt"
+    - "github-actions"
+
+badges:
+  stars: true
+  issues: true
+  prs: true
+  license: true
+
+highlights:
+  - "Entire toolchain provisioned by nix flake + direnv — nothing installed globally"
+  - "Conventional commits enforced via lefthook"
+  - "Automated changelog and releases with release-please"
+  - "Runner-agnostic: task or just, hooks call shared scripts directly"
+  - "Works as a git submodule for shared tooling"

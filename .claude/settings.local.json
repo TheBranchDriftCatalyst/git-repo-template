@@ -13,6 +13,5 @@
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-  ]
+  "enabledMcpjsonServers": []
 }

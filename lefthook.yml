@@ -1,8 +1,67 @@
-# Git hooks managed by lefthook
-# Run: lefthook install
+# Git hooks. Installed by `yarn install` via the `prepare` script.
 #
-# Extends shared hooks from .catalyst/tooling — add project-specific
-# overrides below (they merge with the shared config).
+# Mirrors catalyst-agentic-sdlc, which is the canonical source for this
+# pattern — keep them aligned so changes backport cleanly in either
+# direction. Every command is a standard yarn-installed tool; there are no
+# bespoke validator scripts here any more.
+#
+# `stage_fixed: true` is the reason the formatters can safely auto-fix: it
+# re-stages what they rewrote, so the commit records the fixed content
+# instead of leaving the fix behind in the working tree.
 
-extends:
-  - .catalyst/tooling/shared/configs/lefthook.yml
+pre-commit:
+  parallel: true
+  commands:
+    gitleaks:
+      # Secret scanning, and the one check here that is not about style.
+      # `--staged` is gitleaks' own documented pre-commit mode; `--redact`
+      # keeps a detected secret out of the terminal and lefthook's output,
+      # so finding one does not itself leak it.
+      #
+      # This repo renders real secrets to disk (.npmrc, .secrets/) from
+      # 1Password on direnv entry. Those paths are gitignored, so they are
+      # never staged — this is the backstop for the day a .gitignore edit
+      # gets that wrong.
+      #
+      # Runs with gitleaks' built-in rules, no .gitleaks.toml: verified clean
+      # against .env.tpl and .npmrc.tpl, which hold op:// references rather
+      # than values.
+      run: gitleaks git --staged --no-banner --redact
+
+    markdownlint:
+      glob: "*.md"
+      run: npx --no-install markdownlint-cli2 {staged_files}
+      stage_fixed: true
+
+    markdown-links:
+      glob: "*.md"
+      # Blocks on broken relative links to files and headings. External URLs
+      # are ignored by .markdown-link-check.json, so this stays offline and
+      # deterministic — a blocking hook must not fail because a remote host
+      # is down or rate-limiting.
+      run: npx --no-install markdown-link-check --quiet --config .markdown-link-check.json {staged_files}
+
+    prettier:
+      glob: "*.{md,json,yml,yaml}"
+      run: npx --no-install prettier --write {staged_files}
+      stage_fixed: true
+
+    conflict-markers:
+      # git's own --check reports leftover conflict markers and whitespace
+      # errors across the staged diff. Built in, nothing to maintain.
+      run: git diff --cached --check
+
+commit-msg:
+  commands:
+    commitlint:
+      # Config lives in package.json under the "commitlint" key.
+      # --no-install so a missing dependency fails loudly instead of npx
+      # silently fetching a different version from the registry.
+      run: npx --no-install commitlint --edit {1}
+
+    no-ai-attribution:
+      run: |
+        if grep -qE "(Generated with \[?Claude Code|Co-Authored-By: Claude|🤖 Generated)" {1}; then
+          echo "[lefthook] commit message contains AI attribution — strip it before committing"
+          exit 1
+        fi

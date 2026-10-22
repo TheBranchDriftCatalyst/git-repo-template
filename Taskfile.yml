@@ -1,7 +1,12 @@
-version: '3'
+version: "3"
 
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
+# Thin delegates to the yarn scripts in package.json, which are the single
+# definition of every operation. `just` mirrors this file; neither runner is
+# required — `yarn <script>` always works on its own.
+#
+# Nothing here reimplements logic. If a recipe would need more than a
+# delegation, it belongs in package.json's scripts instead, so that CI, the
+# git hooks and both runners all invoke the same thing.
 
 tasks:
   default:
@@ -9,29 +14,67 @@ tasks:
     cmds:
       - task --list
 
-  # ─── Bootstrap ───────────────────────────────────────────────
-  # Canonical install entrypoint. Sub-projects extend this — they
-  # should call it from THEIR install task (or list it as a dep) so
-  # `task install` on any repo always installs the pre-commit hooks
-  # alongside the language-specific deps.
   install:
-    desc: Initial bootstrap — language deps + pre-commit hooks
+    desc: "Install tooling and git hooks (yarn `prepare` runs lefthook install)"
     cmds:
-      - task: install:hooks
+      - yarn install
 
-  install:hooks:
-    desc: Install pre-commit hooks (no-op if .pre-commit-config.yaml absent)
-    silent: true
+  test:
+    desc: "Prettier check + markdown lint"
     cmds:
-      - |
-        if [ -f .pre-commit-config.yaml ] || [ -f .pre-commit-config.yml ]; then
-          if command -v pre-commit >/dev/null 2>&1; then
-            pre-commit install --install-hooks
-          elif command -v uv >/dev/null 2>&1; then
-            uv tool install pre-commit && pre-commit install --install-hooks
-          elif command -v pipx >/dev/null 2>&1; then
-            pipx install pre-commit && pre-commit install --install-hooks
-          else
-            echo "::WARN:: pre-commit not on PATH and uv/pipx unavailable — skipping hook install" >&2
-          fi
-        fi
+      - yarn test
+
+  lint:
+    desc: "Lint markdown"
+    cmds:
+      - yarn lint:md
+
+  lint:fix:
+    desc: "Lint markdown, fixing what can be fixed"
+    cmds:
+      - yarn lint:md:fix
+
+  format:
+    desc: "Format md/json/yaml with prettier"
+    cmds:
+      - yarn format
+
+  format:check:
+    desc: "Check formatting without writing"
+    cmds:
+      - yarn format:check
+
+  # ─── Release ─────────────────────────────────────────────────
+  # commit-and-tag-version bumps package.json, writes CHANGELOG.md, commits
+  # and tags — all configured under the "commit-and-tag-version" key in
+  # package.json. Pushing the tag is what triggers the GitHub Release
+  # workflow. See RELEASE.md.
+  release:dry:
+    desc: "Preview the next version and changelog entry — writes nothing"
+    cmds:
+      - yarn release:dry
+
+  release:
+    desc: "Bump version, write CHANGELOG.md, commit and tag"
+    cmds:
+      - yarn release
+
+  release:patch:
+    desc: "Force a patch release"
+    cmds:
+      - yarn release:patch
+
+  release:minor:
+    desc: "Force a minor release"
+    cmds:
+      - yarn release:minor
+
+  release:major:
+    desc: "Force a major release"
+    cmds:
+      - yarn release:major
+
+  release:push:
+    desc: "Push the release commit and tag (triggers the GitHub Release)"
+    cmds:
+      - yarn release:push

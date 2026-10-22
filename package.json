@@ -1,0 +1,132 @@
+{
+  "name": "git-repo-template",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Nix-provisioned base git template: dev shell, hooks, release automation, CI",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/TheBranchDriftCatalyst/git-repo-template.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+    "lint:md:fix": "markdownlint-cli2 --fix \"**/*.md\" \"#node_modules\"",
+    "lint:links": "git ls-files '*.md' | while read -r f; do [ -f \"$f\" ] && printf '%s\\n' \"$f\"; done | xargs -r markdown-link-check --quiet --config .markdown-link-check.json",
+    "lint:secrets": "gitleaks git --no-banner --redact",
+    "format": "prettier --write \"**/*.{md,json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{md,json,yml,yaml}\"",
+    "test": "yarn format:check && yarn lint:md && yarn lint:links",
+    "commitlint": "commitlint --edit",
+    "changelog": "conventional-changelog -p conventionalcommits -i CHANGELOG.md -s -r 0",
+    "release": "commit-and-tag-version",
+    "release:dry": "commit-and-tag-version --dry-run",
+    "release:patch": "commit-and-tag-version --release-as patch",
+    "release:minor": "commit-and-tag-version --release-as minor",
+    "release:major": "commit-and-tag-version --release-as major",
+    "release:push": "git push --follow-tags origin HEAD",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "commit-and-tag-version": "^12.5.0",
+    "conventional-changelog-cli": "^5.0.0",
+    "lefthook": "^1.7.0",
+    "markdown-link-check": "^3.12.2",
+    "markdownlint-cli2": "^0.14.0",
+    "prettier": "^3.3.3"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "proseWrap": "preserve",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": false,
+    "trailingComma": "none",
+    "overrides": [
+      {
+        "files": "*.md",
+        "options": {
+          "tabWidth": 2,
+          "proseWrap": "preserve"
+        }
+      }
+    ]
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "header-max-length": [
+        2,
+        "always",
+        100
+      ],
+      "body-max-line-length": [
+        0
+      ]
+    }
+  },
+  "commit-and-tag-version": {
+    "header": "# Changelog\n\nAll notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n",
+    "types": [
+      {
+        "type": "feat",
+        "section": "Features"
+      },
+      {
+        "type": "fix",
+        "section": "Bug Fixes"
+      },
+      {
+        "type": "perf",
+        "section": "Performance"
+      },
+      {
+        "type": "refactor",
+        "section": "Refactors"
+      },
+      {
+        "type": "docs",
+        "section": "Documentation"
+      },
+      {
+        "type": "build",
+        "section": "Build & Tooling"
+      },
+      {
+        "type": "ci",
+        "section": "CI"
+      },
+      {
+        "type": "chore",
+        "section": "Chores",
+        "hidden": true
+      },
+      {
+        "type": "style",
+        "section": "Styles",
+        "hidden": true
+      },
+      {
+        "type": "test",
+        "section": "Tests",
+        "hidden": true
+      }
+    ],
+    "commitUrlFormat": "https://github.com/TheBranchDriftCatalyst/git-repo-template/commit/{{hash}}",
+    "compareUrlFormat": "https://github.com/TheBranchDriftCatalyst/git-repo-template/compare/{{previousTag}}...{{currentTag}}",
+    "issueUrlFormat": "https://github.com/TheBranchDriftCatalyst/git-repo-template/issues/{{id}}",
+    "userUrlFormat": "https://github.com/{{user}}",
+    "bumpFiles": [
+      {
+        "filename": "package.json",
+        "type": "json"
+      }
+    ],
+    "scripts": {
+      "prerelease": "yarn test"
+    }
+  }
+}

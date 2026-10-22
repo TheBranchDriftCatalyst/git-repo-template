@@ -1,2 +1,33 @@
 .DS_Store
+
+# catalyst-operator dev-loop sandbox (see Tiltfile)
 .dev-loop/
+
+# language deps and build/test artifacts
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+dist/
+
+# un-vaulted local overrides, loaded by .envrc via dotenv_if_exists
+.env.local
+
+# ── load-bearing, not hygiene ──────────────────────────────────────────────
+# The three entries below are a HARD REQUIREMENT of the 1Password direnv
+# helpers, not tidiness. _op_gitignored() shells out to `git check-ignore`,
+# and use_onepassword / _tpl / _file all refuse to render to a path that is
+# inside the repo and not ignored — they bail with "secrets NOT loaded".
+# Delete any of these lines and secrets silently stop materializing on
+# direnv entry.
+
+# the helpers' render cache and manifest live here
+.direnv/
+
+# rendered by use_onepassword_tpl from .npmrc.tpl — holds a plaintext
+# registry token
+.npmrc
+
+# materialized by use_onepassword_file — single whole-file secrets
+# (1Password Connect credentials, keypairs)
+.secrets/

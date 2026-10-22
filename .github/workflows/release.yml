@@ -1,0 +1,59 @@
+name: Release
+
+# Mirrors catalyst-agentic-sdlc — keep aligned so changes backport cleanly.
+#
+# The release itself happens LOCALLY: `yarn release` has
+# commit-and-tag-version bump package.json, write CHANGELOG.md, commit and
+# tag. `yarn release:push` pushes the tag, which triggers this workflow.
+# All this does is turn an existing tag into a GitHub Release — it never
+# computes a version or writes a changelog, so there is still exactly one
+# writer per artifact.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Extract release notes for this tag
+        id: notes
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          awk -v ver="$version" '
+            BEGIN { capture=0 }
+            /^##? \[?'"'"'?[0-9]+\.[0-9]+\.[0-9]+/ {
+              if (capture) exit
+              if (index($0, ver) > 0) { capture=1; next }
+            }
+            capture { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release ${tag}" > RELEASE_NOTES.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false

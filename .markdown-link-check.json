@@ -1,0 +1,7 @@
+{
+  "//": "Link validation for markdown. Run by lefthook on pre-commit, and by `npm run lint:links`.",
+  "//2": "External URLs are IGNORED on purpose. A blocking hook has to be offline and deterministic — otherwise a flaky network or a rate-limited host fails a commit that has nothing wrong with it. What this catches is the class that actually rots: relative links to files and headings inside this repo.",
+  "//3": "Reference-style links and heading fragments are additionally covered by markdownlint rules MD051/MD052/MD053, which are active via `default: true` in .markdownlint-cli2.jsonc.",
+  "ignorePatterns": [{ "pattern": "^https?://" }, { "pattern": "^mailto:" }],
+  "aliveStatusCodes": [200, 206]
+}

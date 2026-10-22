@@ -3,552 +3,213 @@
 [![License](https://img.shields.io/github/license/TheBranchDriftCatalyst/git-repo-template)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/TheBranchDriftCatalyst/git-repo-template)](https://github.com/TheBranchDriftCatalyst/git-repo-template/releases)
 
-> **⚠️ DESIGN PHASE - NOT YET IMPLEMENTED**
->
-> This repository is currently in the design and planning phase. The git submodule integration strategy is on hold while other repositories are being worked on. The core tooling works standalone, but the submodule workflow has not been tested in production yet.
->
-> **Status**: Phase 1 MVP complete for standalone use. Production rollout pending.
+Base git repository template: a nix-provisioned dev shell, 1Password-backed
+secrets, git hooks, conventional commits, and config-driven releases.
 
-**Common build tools and release automation for CI/CD across all your repositories.**
+Tooling patterns here mirror
+[catalyst-agentic-sdlc](https://github.com/TheBranchDriftCatalyst/catalyst-agentic-sdlc),
+which is the **canonical source** for them. Keep the two aligned so changes
+backport cleanly in either direction.
 
-This repository provides standardized, language-agnostic tooling for:
-- 🔄 **Automated Releases** - Semantic versioning with GitHub Actions
-- 📝 **Conventional Commits** - Enforced commit message format via git hooks
-- 📦 **Multi-arch Docker Builds** - amd64 + arm64 support (optional)
-- 🚀 **CI/CD Ready** - Drop-in GitHub Actions workflows
-- 🔧 **Multi-language Support** - Python, TypeScript, Go, and more
+This README describes only what exists on disk. Planned work is in
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Quick Start
+## The stack, and why each piece is here
 
-### Option 1: Use as Template (New Repository)
+| Concern                 | Tool                                        | Problem it solves                                                                                                                         | Why this tool                                                                                                                                                                          |
+| ----------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dev toolchain**       | nix flake + `direnv`                        | Per-repo tool versions drift from CI's, and global installs collide between projects.                                                     | `flake.lock` pins the whole closure. `cd` in loads the shell, `cd` out unloads it. This is why there is no "install X with brew" section.                                              |
+| **Secrets**             | 1Password + `direnv`                        | `.env` files holding real values get committed sooner or later.                                                                           | Only `op://` _references_ are committed; values materialize on entry into gitignored `0600` files. Soft-fail — no `op`, no session, or a missing item warns and the shell still loads. |
+| **Secret scanning**     | `gitleaks`                                  | Being careful is not a control. One bad `.gitignore` edit stages a rendered credential.                                                   | Blocking `pre-commit` scan of the staged diff, `--redact` so a finding isn't itself leaked into logs. Go binary from the flake — no npm or yarn equivalent.                            |
+| **Git hooks**           | `lefthook`                                  | Checks that only run in CI are found after you've pushed. And two hook frameworks silently fight over `.git/hooks` — last `install` wins. | One binary, parallel execution, and `stage_fixed: true` re-stages what the formatters rewrite, so a fix can't be left behind in the working tree.                                      |
+| **Commit format**       | `commitlint`                                | Release and changelog automation needs machine-readable commits; humans don't supply them unprompted.                                     | `config-conventional` accepts `feat!:`, and rejects `FEAT:`, capitalised subjects and unknown types — each with a message naming the rule. Config lives in `package.json`.             |
+| **Markdown**            | `markdownlint-cli2` + `markdown-link-check` | Docs rot silently: dead relative links and malformed structure.                                                                           | Auto-fixes what it can on commit. Link checking ignores external URLs on purpose, so a blocking hook stays offline and deterministic.                                                  |
+| **Formatting**          | `prettier`                                  | Diff noise and bikeshedding over md/json/yaml style.                                                                                      | Config in `package.json`; auto-fixes and re-stages on commit.                                                                                                                          |
+| **Conflict markers**    | `git diff --check`                          | `<<<<<<<` reaching `main`.                                                                                                                | Built into git. Nothing to maintain.                                                                                                                                                   |
+| **Version + changelog** | `commit-and-tag-version`                    | Hand-bumped versions desync from tags and changelogs, and nobody remembers the steps.                                                     | Fully config-driven in `package.json`: changelog sections, URL formats, `bumpFiles` with custom updaters, and a `prerelease` hook that runs tests before anything is tagged.           |
+| **GitHub Release**      | tag-triggered workflow                      | A git tag is not a release page.                                                                                                          | Fires on `v*`, extracts that version's notes from `CHANGELOG.md`, publishes. It never computes a version — one writer per artifact.                                                    |
+| **CI**                  | GitHub Actions                              | Nothing above is trustworthy if it only ran on one laptop.                                                                                | Lint + format + commit-message checks, running unconditionally rather than behind project-type detection.                                                                              |
+| **Dependencies**        | `renovate`                                  | Deps rot silently; naive config means one PR per package per week.                                                                        | Non-major updates grouped into one weekly automerged PR; majors isolated for review.                                                                                                   |
+| **Repo metadata**       | `catalyst_repo.yaml`                        | The operator cockpit and profile generator need machine-readable repo facts.                                                              | Read _and written_ at the repo root by catalyst-operator's loader — root path only, no upward walk, so the location is load-bearing.                                                   |
 
-```bash
-# Clone this template
+`lefthook` is the only git-hook framework here. There is no `pre-commit`, no
+husky, and nothing in `.git/hooks` but samples until `yarn install` runs.
+
+## Quick start
+
+```sh
 git clone https://github.com/TheBranchDriftCatalyst/git-repo-template my-new-repo
 cd my-new-repo
 
-# Run bootstrap script
-./scripts/bootstrap.sh
-
-# Make your first commit
-git commit -m "feat: initial commit"
-
-# Create your first release
-task release:patch
+direnv allow    # builds the nix dev shell, loads secrets
+yarn install     # installs tooling AND git hooks (via the `prepare` script)
 ```
 
-### Option 2: Add to Existing Repository (As Submodule)
+`direnv allow` gives you the toolchain; `yarn install` gives you the hooks.
+Neither step needs anything pre-installed beyond nix and direnv.
 
-```bash
-cd your-existing-repo
+> **nix only sees git-tracked files.** In a fresh repo, `git add flake.nix
+flake.lock` before `direnv allow`, or `use flake` fails with "path does not
+> exist".
 
-# Download and run the installer
-curl -fsSL https://raw.githubusercontent.com/TheBranchDriftCatalyst/git-repo-template/main/scripts/install.sh | bash
+## Workflows
 
-# Or manually:
-git submodule add https://github.com/TheBranchDriftCatalyst/git-repo-template .catalyst
-.catalyst/scripts/install.sh
+### Install hooks
+
+```sh
+yarn install              # `prepare` runs `lefthook install`
+npx lefthook install     # or directly, if hooks are all you want
 ```
 
-## Features
+### Lint and format
 
-### ✅ Conventional Commits Enforcement
-
-Git hooks automatically validate commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-```bash
-# ✅ Valid commits
-git commit -m "feat: add user authentication"
-git commit -m "fix: resolve memory leak in worker"
-git commit -m "docs: update installation guide"
-
-# ❌ Invalid commits (rejected by git hook)
-git commit -m "added stuff"
-git commit -m "fixing bugs"
+```sh
+yarn test                 # format:check + lint:md + lint:links — what CI runs
+yarn lint:md          # markdownlint
+yarn lint:md:fix      # markdownlint, fixing what it can
+yarn lint:links       # broken relative links and heading anchors
+yarn lint:secrets     # gitleaks over history
+yarn format           # prettier --write over md/json/yml/yaml
+yarn format:check     # prettier, no writes
 ```
 
-**Supported types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`, `revert`
+Or through either runner: `task test` / `just test`, `task lint` / `just lint`,
+`task format` / `just format`.
 
-### 🔄 Automated Semantic Versioning
+### Generate a changelog
 
-Manual releases with automatic version bumping:
-
-```bash
-# Patch release (0.1.0 → 0.1.1) - bug fixes
-task release:patch
-
-# Minor release (0.1.0 → 0.2.0) - new features
-task release:minor
-
-# Major release (0.1.0 → 1.0.0) - breaking changes
-task release:major
+```sh
+yarn release:dry      # preview the next version + changelog entry, writes NOTHING
+yarn changelog        # regenerate CHANGELOG.md from all history
 ```
 
-### 📝 Automated Changelog Generation
+`release:dry` is the preview — there is no separate preview tool, because a
+second changelog generator would be a second writer of the same file.
 
-Using [release-please](https://github.com/googleapis/release-please), changelogs are automatically generated from conventional commits:
+### Release
 
-1. Push commits to `main` branch
-2. Release-please bot creates/updates a release PR
-3. Merge the PR → automatic GitHub release with changelog
-4. `CHANGELOG.md` is updated automatically
-
-### 🐳 Multi-arch Docker Builds (Optional)
-
-Build and publish Docker images for multiple architectures:
-
-```bash
-# Enable Docker builds
-export REGISTRY_URL="docker.io/username"
-export IMAGE_NAME="my-app"
-export BUILDX_ENABLED="true"
-
-# Release with Docker build
-task release:patch
+```sh
+yarn release          # bump version, write CHANGELOG.md, commit, tag
+yarn release:push     # push commit + tag → triggers the GitHub Release
 ```
 
-Supports:
-- Docker Hub
-- GitHub Container Registry (GHCR)
-- Multiple architectures (amd64, arm64)
+Force a level with `release:patch` / `release:minor` / `release:major`. The
+`prerelease` hook runs `yarn test` first, so a failing check stops the release
+before it tags anything. Full detail, including the one-writer-per-artifact
+rule: [docs/RELEASE.md](docs/RELEASE.md).
 
-## Installation
+### Secrets
 
-### Prerequisites
-
-- **Git** 2.x+
-- **Task** (go-task) - [Install](https://taskfile.dev/installation/)
-- **Lefthook** - [Install](https://github.com/evilmartians/lefthook#install)
-- **Docker** (optional) - For Docker builds
-
-### Bootstrap Script (Recommended)
-
-For new repositories or this template:
-
-```bash
-# Clone and initialize
-git clone https://github.com/TheBranchDriftCatalyst/git-repo-template my-repo
-cd my-repo
-
-# Run bootstrap (installs hooks, validates setup)
-./scripts/bootstrap.sh
+```sh
+scripts/provision-1password.sh --dry-run   # what's missing, values masked
+scripts/provision-1password.sh             # create only what's absent
+op_rotate                                  # re-render after rotating a secret
+op_cleanup                                 # delete every rendered secret
 ```
 
-### Manual Installation
+`.env.tpl` and `.npmrc.tpl` commit `op://` references only. Three strategies
+are exercised by `.envrc`:
 
-```bash
-# 1. Install lefthook hooks
-lefthook install
+| Strategy               | Renders to             | Used here for                                                              |
+| ---------------------- | ---------------------- | -------------------------------------------------------------------------- |
+| `use_onepassword`      | env vars               | `DEMO_SECRET`, `DATABASE_URL` from `.env.tpl`                              |
+| `use_onepassword_tpl`  | gitignored `0600` file | `.npmrc`, since yarn/npm take a registry token only from a config file     |
+| `use_onepassword_file` | gitignored `0600` file | one whole vault item `op inject` can't template, e.g. a Connect credential |
 
-# 2. Verify installation
-task --list
+`op` and the `use_onepassword*` functions come from home-manager (catalyst
+dotfiles), not this flake — they're machine-level, shared by every repo.
 
-# 3. Test commit validation
-git commit --allow-empty -m "test: validation check"
-```
+> The `.npmrc`, `.secrets/` and `.direnv/` entries in `.gitignore` are
+> **load-bearing**, not hygiene: the helpers call `git check-ignore` and refuse
+> to render to a path in the repo that isn't ignored.
 
-## Usage
+## Commit format
 
-### Daily Development
-
-```bash
-# Make changes to your code
-git add .
-
-# Commit with conventional format (enforced by git hook)
-git commit -m "feat: add new API endpoint"
-
-# Push to remote
-git push origin main
-```
-
-### Creating Releases
-
-#### Local Manual Releases
-
-```bash
-# Patch release (0.0.X) - bug fixes only
-task release:patch
-
-# Minor release (0.X.0) - new features, backward compatible
-task release:minor
-
-# Major release (X.0.0) - breaking changes
-task release:major
-
-# Short alias (defaults to patch)
-task release
-```
-
-**What happens:**
-1. `VERSION` file is updated
-2. Git commit created with new version
-3. Annotated git tag created (e.g., `v0.1.1`)
-4. Tag pushed to remote (triggers GitHub Actions)
-5. Optional: Docker image built and tagged
-
-#### Automated Releases via GitHub
-
-1. **Make conventional commits** and push to `main`:
-   ```bash
-   git commit -m "feat: add user profile page"
-   git push origin main
-   ```
-
-2. **Release-please creates a PR** with:
-   - Auto-generated CHANGELOG
-   - Version bump based on commit types
-   - Release notes
-
-3. **Merge the release PR** → GitHub release created automatically
-
-4. **Optional: Docker images published** (if workflow configured)
-
-### Environment Variables
-
-Configure release behavior with environment variables:
-
-```bash
-# Docker configuration
-export REGISTRY_URL="docker.io/myusername"  # or ghcr.io/myorg
-export IMAGE_NAME="my-app"
-export BUILDX_ENABLED="true"                # Enable multi-arch builds
-export BUILD_ARCHS="linux/amd64,linux/arm64"
-
-# Git behavior
-export PUSH_GIT_TAGS="true"                 # Auto-push tags to remote
-export VERSION_FILE="VERSION"               # Version file location
-```
-
-## Project Structure
+Enforced by lefthook on `commit-msg`:
 
 ```
-.catalyst/                                   # Build tooling (can be git submodule)
-├── repo.yaml                               # Repository metadata
-└── tooling/
-    ├── shared/                             # Shared across all repos
-    │   ├── configs/
-    │   │   ├── lefthook.yml               # Git hooks config
-    │   │   ├── release-please-config.json # Release automation
-    │   │   └── .release-please-manifest.json
-    │   ├── scripts/
-    │   │   ├── build-release.sh           # Manual release script
-    │   │   └── validate-commit.sh         # Commit validator
-    │   └── taskfiles/
-    │       └── Release.taskfile.yml       # Task definitions
-    └── repos/                              # Repo-specific overrides
-        ├── kasa-exporter/
-        ├── swarm-graph/
-        └── catalyst-ui/
-
-.github/workflows/
-└── release-please.yml                      # GitHub Actions for releases
-
-scripts/
-├── bootstrap.sh                            # Initial setup script
-└── install.sh                              # Submodule installation script
-
-Taskfile.yml                                # Task runner configuration
-lefthook.yml                                # Git hooks configuration
-VERSION                                     # Current version (0.1.0)
-CHANGELOG.md                                # Auto-generated changelog
+type(scope)?: description
 ```
 
-## Available Tasks
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`,
+`build`, `ci`, `revert`.
 
-```bash
-# List all available tasks
-task --list
-
-# Release tasks
-task release              # Alias for release:patch
-task release:patch        # Bump patch version (0.0.X)
-task release:minor        # Bump minor version (0.X.0)
-task release:major        # Bump major version (X.0.0)
+```sh
+git commit -m "feat: add user authentication"    # ✅
+git commit -m "fix(api): correct status code"    # ✅
+git commit -m "feat!: drop API key support"      # ✅ breaking → major
+git commit -m "added stuff"                      # ❌ rejected
+git commit -m "FEAT: shouty"                     # ❌ type-case
 ```
 
-## Using as Git Submodule
-
-This repository is designed to be used as a git submodule in other projects, providing shared build tooling.
-
-### Adding to Your Repository
-
-```bash
-cd your-repo
-
-# Add as submodule
-git submodule add https://github.com/TheBranchDriftCatalyst/git-repo-template .catalyst
-
-# Run installer
-.catalyst/scripts/install.sh
-
-# Commit the integration
-git add .catalyst Taskfile.yml lefthook.yml VERSION CHANGELOG.md .github/
-git commit -m "chore: add build tooling via git submodule"
-```
-
-### Updating Submodule
-
-```bash
-# Update to latest version
-git submodule update --remote .catalyst
-
-# Or manually
-cd .catalyst
-git fetch origin
-git checkout main
-git pull
-cd ..
-git add .catalyst
-git commit -m "chore: update build tooling"
-```
-
-### Integration Pattern
-
-**In your `Taskfile.yml`:**
-```yaml
-version: '3'
-
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
-
-tasks:
-  # Your custom tasks here
-  build:
-    desc: "Build your project"
-    cmds:
-      - echo "Building..."
-```
-
-**In your `lefthook.yml`:**
-```yaml
-commit-msg:
-  commands:
-    conventional-commit:
-      run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}
-```
-
-## GitHub Actions Setup
-
-### Release-Please Workflow
-
-Already included in `.github/workflows/release-please.yml`. No setup required!
-
-**Permissions needed** (automatically granted in GitHub Actions):
-- `contents: write` - Create releases and tags
-- `pull-requests: write` - Create release PRs
-
-### Docker Publishing (Optional)
-
-To enable automated Docker builds on release:
-
-1. **Add GitHub Secrets** (Settings → Secrets → Actions):
-   - `DOCKERHUB_USERNAME` - Your Docker Hub username
-   - `DOCKERHUB_TOKEN` - Docker Hub access token
-
-2. **Create workflow** `.github/workflows/docker-publish.yml`:
-   ```bash
-   cp .catalyst/tooling/shared/templates/docker-publish.yml .github/workflows/
-   ```
-
-3. **Add Dockerfile.production** to your repo
-
-## Conventional Commit Guide
-
-### Format
+## Layout
 
 ```
-type(scope?): description
+.envrc  flake.nix  flake.lock        nix dev shell + direnv entry
+.env.tpl  .npmrc.tpl                 op:// secret references (safe to commit)
+.config/starship.toml                repo-local prompt
+.vscode/                             direnv + nix-ide recommendations
 
-[optional body]
+package.json                         yarn scripts + config for prettier,
+                                     commitlint and commit-and-tag-version
+lefthook.yml                         git hooks
+.markdownlint-cli2.jsonc             markdown rules
+.markdown-link-check.json            link checking (external URLs ignored)
+.prettierignore                      incl. CHANGELOG.md and secret paths
+renovate.json                        dependency update policy
+catalyst_repo.yaml                   repo metadata (root path is load-bearing)
+CHANGELOG.md                         generated — do not hand-edit
 
-[optional footer]
+Taskfile.yml  justfile               thin delegates to the yarn scripts
+scripts/provision-1password.sh       create this repo's vault items
+.github/workflows/ci.yml             lint + format + commitlint
+.github/workflows/release.yml        tag → GitHub Release
+
+backend/                             FastAPI + uv reference service
+frontend/                            React + Vite reference UI (yarn)
+k8s/                                 manifests for both services
+Tiltfile                             local k8s dev loop, context-guarded
 ```
 
-### Types
+## The reference app
 
-| Type | Description | Version Bump |
-|------|-------------|--------------|
-| `feat` | New feature | Minor |
-| `fix` | Bug fix | Patch |
-| `docs` | Documentation only | None |
-| `style` | Code style (formatting, etc.) | None |
-| `refactor` | Code refactoring | None |
-| `perf` | Performance improvement | Patch |
-| `test` | Adding/updating tests | None |
-| `chore` | Maintenance tasks | None |
-| `build` | Build system changes | None |
-| `ci` | CI/CD changes | None |
-| `revert` | Revert previous commit | Patch |
+A deliberately small FastAPI + React pair, there to exercise the dev
+environment rather than to be interesting: `flake.nix` pins its toolchain,
+`.envrc` installs its deps on entry, and `Tiltfile` runs it in a local
+cluster.
 
-### Examples
+```sh
+# two terminals, no cluster needed
+cd backend  && uv run uvicorn main:app --reload   # :8000
+cd frontend && yarn dev                           # :5173, proxies /api → :8000
 
-```bash
-# Simple feature
-git commit -m "feat: add user authentication"
+# or the whole thing in a local k8s cluster
+kind create cluster --name git-repo-template
+tilt up            # builds images, applies k8s/, live-syncs code into pods
+tilt down
 
-# Feature with scope
-git commit -m "feat(api): add rate limiting to endpoints"
-
-# Bug fix with body
-git commit -m "fix: resolve memory leak in worker
-
-The worker was not properly closing database connections.
-This fix ensures all connections are closed on completion."
-
-# Breaking change (triggers major version)
-git commit -m "feat!: redesign API authentication
-
-BREAKING CHANGE: API now requires JWT tokens instead of API keys.
-Update your client code to use the new auth flow."
+# tests and build
+cd backend  && uv run pytest
+cd frontend && yarn build
 ```
 
-## Troubleshooting
+`allow_k8s_contexts` in the `Tiltfile` restricts it to `kind-git-repo-template`,
+`docker-desktop` and `orbstack` — Tilt refuses to apply anything if your
+current context is a real cluster.
 
-### Commit message rejected
+`.envrc` installs both dependency trees on directory entry, mtime-guarded
+against the manifests, and each block is additionally guarded on its manifest
+existing — so a repo created from this template that deletes `backend/` or
+`frontend/` still loads cleanly.
 
-```bash
-# Error: ❌ Invalid commit message format
+## Docs
 
-# Solution: Use conventional commit format
-git commit -m "feat: your description here"
-```
-
-### Lefthook not installed
-
-```bash
-# Error: lefthook: command not found
-
-# Solution: Install lefthook
-# macOS
-brew install lefthook
-
-# Or using go
-go install github.com/evilmartians/lefthook@latest
-
-# Then install hooks
-lefthook install
-```
-
-### Task not found
-
-```bash
-# Error: task: command not found
-
-# Solution: Install Task
-# macOS
-brew install go-task
-
-# Linux
-sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
-```
-
-### Release failed - dirty git repo
-
-```bash
-# Error: Git repository has uncommitted changes
-
-# Solution: Commit or stash your changes first
-git add .
-git commit -m "feat: your changes"
-# Then retry release
-task release:patch
-```
-
-## Language-Specific Examples
-
-### Python Project
-
-```yaml
-# Taskfile.yml
-version: '3'
-
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
-
-tasks:
-  install:
-    desc: "Install dependencies"
-    cmds:
-      - poetry install
-
-  test:
-    desc: "Run tests"
-    cmds:
-      - poetry run pytest
-```
-
-### TypeScript/Node.js Project
-
-```yaml
-# Taskfile.yml
-version: '3'
-
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
-
-tasks:
-  install:
-    desc: "Install dependencies"
-    cmds:
-      - npm install
-
-  build:
-    desc: "Build project"
-    cmds:
-      - npm run build
-
-  test:
-    desc: "Run tests"
-    cmds:
-      - npm test
-```
-
-### Go Project
-
-```yaml
-# Taskfile.yml
-version: '3'
-
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
-
-tasks:
-  build:
-    desc: "Build binary"
-    cmds:
-      - go build -o bin/app .
-
-  test:
-    desc: "Run tests"
-    cmds:
-      - go test ./...
-```
-
-## Contributing
-
-This is a template repository designed to be forked and customized. To contribute improvements:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-improvement`
-3. Make your changes with conventional commits
-4. Push and create a pull request
+| File                               | What it covers                                                      |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| [docs/RELEASE.md](docs/RELEASE.md) | Release and changelog workflow, version bump rules, troubleshooting |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Everything not built yet, and open decisions                        |
+| [CLAUDE.md](CLAUDE.md)             | Invariants and settled decisions, for AI agents                     |
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details
-
-## Related Projects
-
-- [@TheBranchDriftCatalyst](https://github.com/TheBranchDriftCatalyst) - GitHub profile page generator
-- [catalyst-devspace](https://github.com/TheBranchDriftCatalyst/catalyst-devspace) - Personal development workspace
-
-## Support
-
-- 📖 [Documentation](docs/)
-- 🐛 [Issues](https://github.com/TheBranchDriftCatalyst/git-repo-template/issues)
-- 💬 [Discussions](https://github.com/TheBranchDriftCatalyst/git-repo-template/discussions)
-
----
-
-**Built with ❤️ for standardized releases across all your projects.**
+MIT — see [LICENSE](LICENSE).

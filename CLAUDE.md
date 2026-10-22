@@ -1,334 +1,196 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for AI agents working in this repository.
 
-> **⚠️ DESIGN PHASE - NOT YET IMPLEMENTED**
->
-> This repository is currently in the design and planning phase. The git submodule integration strategy is **ON HOLD** while other repositories are being worked on. Core tooling is complete and tested, but production rollout to consuming repositories has not been done yet.
+This file describes **only what exists on disk**. Planned work and open
+decisions live in [docs/ROADMAP.md](docs/ROADMAP.md); do not implement from
+here anything that file lists as unbuilt.
 
-## Project Overview
+## What this repo is
 
-This is a **common build tools repository** designed to be used as a git submodule across multiple projects for standardized release automation, build processes, and CI/CD workflows. It provides language-agnostic tooling for conventional commits, semantic versioning, automated changelogs, and multi-arch Docker builds.
+A base git repository template: a nix-provisioned dev shell, 1Password-backed
+secrets, git hooks, conventional commits, and config-driven releases. Clone it
+to start a new repo.
 
-**Key Principle**: This repository is intended to be used as a git submodule in the `.catalyst/` directory of other projects. Changes here propagate to all consuming repositories.
+It is **not** a shared-tooling submodule. There used to be a `.catalyst/`
+directory mounted into other repos; it is gone, and nothing should reintroduce
+it. Shared behaviour now comes from three standard mechanisms instead: pinned
+versions in `flake.nix` and `yarn.lock`, GitHub's template-repository
+feature, and alignment with the canonical repo below.
 
-## Architecture
+## Canonical alignment
 
-### Dual-Purpose Design
+Tooling patterns here mirror **catalyst-agentic-sdlc**, which is the canonical
+source. `package.json` (scripts, `prettier`, `commitlint`,
+`commit-and-tag-version`), `lefthook.yml`, `.markdownlint-cli2.jsonc`,
+`.prettierignore`, `ci.yml` and `release.yml` all came from there.
 
-1. **Standalone Template Repository**: Can be used directly as a template for new projects
-2. **Git Submodule for Build Tooling**: Designed to be added as a submodule at `.catalyst/` in other repos
+When changing any of those, prefer matching canonical over inventing a local
+variant — the point is that changes backport cleanly in either direction. If a
+divergence is genuinely necessary, comment why in the file itself.
 
-### Directory Structure
+Known deliberate divergences:
+
+- **yarn, not npm.** Canonical uses npm. This repo uses yarn at the root and in
+  `frontend/`, as two independent trees each with their own `yarn.lock` and
+  `node_modules`. Only the install lines differ — the tooling config keys in
+  `package.json` are package-manager agnostic, so changes still backport
+  cleanly.
+- **uv owns Python; nix does not provide it.** `flake.nix` ships `uv` but no
+  `python*`. The interpreter is declared once, in `backend/.python-version`.
+- **A nix flake.** Canonical has none. This repo provisions its toolchain
+  through `flake.nix` + `.envrc`.
+- **gitleaks from the flake.** A Go binary with no npm or yarn equivalent.
+
+## Invariants
+
+Break these and things corrupt silently rather than failing loudly.
+
+### One writer per artifact
+
+| Artifact                    | Sole writer                         |
+| --------------------------- | ----------------------------------- |
+| `CHANGELOG.md`              | `commit-and-tag-version`            |
+| version (in `package.json`) | `commit-and-tag-version`            |
+| `v*` git tags               | `commit-and-tag-version`            |
+| GitHub Release page         | `release.yml`, from an existing tag |
+
+This repo once ran `release-please` _and_ a local `build-release.sh`, both
+bumping the version and pushing `v*` tags, which desynced the version file
+(`0.1.1`) from release-please's manifest (`0.1.0`). Both are deleted. Do not
+add a second changelog generator, a second version bumper, or a CI step that
+computes a version. See [docs/RELEASE.md](docs/RELEASE.md).
+
+### `catalyst_repo.yaml` lives at the repo root
+
+catalyst-operator's loader
+(`packages/catalyst-repo/src/catalyst_repo/loader.py`) sets
+`MANIFEST_FILENAME = "catalyst_repo.yaml"` and resolves it at the repo root
+**with no upward walk**, writing back to the same path. Do not move it, rename
+it, or add a second copy — there used to be one at `.catalyst/repo.yaml` that
+nothing read while it quietly diverged from the live file.
+
+### lefthook is the only git-hook framework
+
+No `pre-commit`, no husky, no `core.hooksPath` override. There were once two
+frameworks both installing into `.git/hooks/pre-commit`, where the last
+`install` to run wins — so one was always a silent no-op. That is why 11
+tracked files had trailing whitespace while a `trailing-whitespace` hook was
+nominally configured.
+
+Hooks are installed by `yarn install` via the `prepare` script.
+
+### Git hooks and Claude Code hooks are different layers
+
+Two hook systems are in play and they are not interchangeable:
+
+- **lefthook** fires on git operations (`pre-commit`, `commit-msg`)
+- **Claude Code hooks** fire on agent tool calls — `git-guard.sh` as
+  `PreToolUse`/`Bash` from the catalyst-meta plugin, plus the GateGuard checks
+
+They overlap in intent in exactly one place: `git-guard.sh` blocks AI
+attribution in commit messages, and lefthook's `commit-msg` has its own
+`no-ai-attribution` command. **Keep both.** git-guard stops the agent before
+the command runs; lefthook stops any commit, including a human's or one made
+outside Claude Code. Different surfaces, same rule — this duplication is
+deliberate, not an oversight to clean up.
+
+### Hooks must not require a task runner
+
+`task` and `just` are both supported and both are thin delegates to the yarn
+scripts in `package.json`. The yarn scripts are the single definition of every
+operation. A hook or CI step must invoke a binary or a yarn script directly, so
+neither runner is ever a hard requirement.
+
+If a recipe needs more than a delegation, it belongs in `package.json`'s
+`scripts`, so CI, the hooks and both runners all invoke the same thing.
+
+### Secret paths in `.gitignore` are load-bearing
+
+`.direnv/`, `.npmrc` and `.secrets/` are not hygiene entries. The 1Password
+direnv helpers call `git check-ignore` and **refuse to render** to a path
+inside the repo that is not ignored, bailing with "secrets NOT loaded". Delete
+any of those lines and secrets silently stop materializing.
+
+`gitleaks` on `pre-commit` is the backstop for the day that goes wrong.
+
+## Layout
 
 ```
-.catalyst/
-├── repo.yaml                                    # Repository metadata (catalyst_repo.yaml schema)
-└── tooling/
-    ├── shared/                                  # Shared across ALL repositories
-    │   ├── configs/
-    │   │   ├── lefthook.yml                    # Git hooks (commit validation)
-    │   │   ├── release-please-config.json      # Release automation config
-    │   │   └── .release-please-manifest.json   # Version tracking
-    │   ├── scripts/
-    │   │   ├── build-release.sh                # Manual release script (semantic versioning)
-    │   │   └── validate-commit.sh              # Conventional commit validator
-    │   ├── taskfiles/
-    │   │   └── Release.taskfile.yml            # Task definitions for releases
-    │   └── templates/                          # Future: Dockerfile templates, etc.
-    └── repos/                                   # Repo-specific overrides (per-branch)
-        ├── kasa-exporter/                      # Kasa-specific build configs
-        ├── swarm-graph/                        # Swarm-specific build configs
-        └── catalyst-ui/                        # UI-specific build configs
+.envrc  flake.nix  flake.lock        nix dev shell + direnv entry
+.env.tpl  .npmrc.tpl                 op:// secret references (safe to commit)
+.config/starship.toml  .vscode/      repo-local prompt, editor recommendations
 
-Root level (when used as standalone template):
-├── Taskfile.yml                                # Includes tasks from .catalyst/tooling
-├── lefthook.yml                                # Sources config from .catalyst/tooling
-├── VERSION                                     # Semantic version tracking
-├── CHANGELOG.md                                # Auto-generated by release-please
-└── .github/workflows/
-    └── release-please.yml                      # GitHub Actions for automated releases
+package.json                         yarn scripts + config for prettier,
+                                     commitlint, commit-and-tag-version
+lefthook.yml                         git hooks
+.markdownlint-cli2.jsonc             markdown rules
+.markdown-link-check.json            link checking (external URLs ignored)
+.prettierignore                      incl. CHANGELOG.md and secret paths
+renovate.json  catalyst_repo.yaml    dependency policy, repo metadata
+CHANGELOG.md                         generated — never hand-edit
+
+Taskfile.yml  justfile               thin delegates to the yarn scripts
+scripts/provision-1password.sh       create this repo's vault items
+.github/workflows/ci.yml             lint + format + commitlint
+.github/workflows/release.yml        tag → GitHub Release
+
+backend/                             FastAPI + uv reference service
+frontend/                            React + Vite reference UI (yarn)
+k8s/                                 manifests for both services
+Tiltfile                             local k8s dev loop, context-guarded
 ```
 
-### Core Components
-
-#### 1. Release Automation (`build-release.sh`)
-
-**Location**: `.catalyst/tooling/shared/scripts/build-release.sh`
-
-**Purpose**: Manual semantic versioning and release creation with optional Docker builds
-
-**Key Features**:
-- Reads/updates `VERSION` file
-- Supports patch/minor/major version bumps
-- Creates annotated git tags with metadata
-- Optional multi-arch Docker builds via buildx
-- Rollback on failure
-- Environment variable configuration
-
-**Environment Variables**:
-- `VERSION_FILE` - Version file path (default: `VERSION`)
-- `REGISTRY_URL` - Docker registry URL (optional)
-- `IMAGE_NAME` - Docker image name (optional)
-- `PUSH_GIT_TAGS` - Auto-push tags to remote (default: `true`)
-- `BUILDX_ENABLED` - Enable multi-arch Docker builds (default: `false`)
-- `BUILD_ARCHS` - Target platforms (default: `linux/amd64,linux/arm64`)
-
-#### 2. Conventional Commits Enforcement
-
-**Location**: `.catalyst/tooling/shared/scripts/validate-commit.sh`
-
-**Purpose**: Validates commit messages follow Conventional Commits specification
-
-**Enforced Format**: `type(scope?): description`
-
-**Valid Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`, `revert`
-
-**Hook Integration**: Runs via lefthook on `commit-msg` hook
-
-#### 3. Release-Please Integration
-
-**Configs**: `.catalyst/tooling/shared/configs/release-please-config.json` and `.release-please-manifest.json`
-
-**Purpose**: Automated changelog generation and GitHub release creation
-
-**Workflow**:
-1. Push conventional commits to `main` branch
-2. Release-please bot creates/updates a release PR
-3. Merging the PR triggers automatic release creation
-4. CHANGELOG.md is auto-generated from commit messages
-
-#### 4. Task Automation
-
-**Location**: `.catalyst/tooling/shared/taskfiles/Release.taskfile.yml`
-
-**Integration**: Root `Taskfile.yml` includes this via `includes:` directive
-
-**Available Tasks**:
-- `task release` - Alias for `release:patch`
-- `task release:patch` - Bump patch version (0.0.X)
-- `task release:minor` - Bump minor version (0.X.0)
-- `task release:major` - Bump major version (X.0.0)
-
-## Common Commands
-
-### Initial Setup
-
-```bash
-# Install lefthook for commit message validation
-lefthook install
-
-# Verify hooks are installed
-lefthook run --all-files
-```
-
-### Making Commits
-
-```bash
-# All commits MUST follow conventional format
-git commit -m "feat: add new feature"
-git commit -m "fix: resolve memory leak"
-git commit -m "docs: update installation guide"
-
-# Invalid commits will be rejected by lefthook
-git commit -m "added stuff"  # ❌ Will fail validation
-```
-
-### Creating Releases
-
-#### Manual Releases (Local)
-
-```bash
-# Patch release (bug fixes): 0.1.0 → 0.1.1
-task release:patch
-
-# Minor release (new features): 0.1.0 → 0.2.0
-task release:minor
-
-# Major release (breaking changes): 0.1.0 → 1.0.0
-task release:major
-
-# Short alias (defaults to patch)
-task release
-```
-
-#### Automated Releases (GitHub Actions)
-
-1. Push conventional commits to `main` branch
-2. GitHub Actions runs release-please workflow
-3. Bot creates/updates release PR with auto-generated CHANGELOG
-4. Merge PR to create GitHub release automatically
-
-### Docker Builds (Optional)
-
-```bash
-# Enable Docker build during release
-export REGISTRY_URL="docker.io/username"
-export IMAGE_NAME="my-repo"
-export BUILDX_ENABLED="true"
-
-# Run release with Docker build
-task release:patch
-```
-
-## Usage as Git Submodule
-
-### Adding to Another Repository
-
-```bash
-cd /path/to/target-repo
-
-# Add as submodule
-git submodule add -b main \
-  https://github.com/TheBranchDriftCatalyst/git-repo-template \
-  .catalyst
-
-# Update the submodule
-git submodule update --init --recursive
-```
-
-### Repository Integration Pattern
-
-**In target repository's `Taskfile.yml`**:
-```yaml
-version: '3'
-
-includes:
-  release: .catalyst/tooling/shared/taskfiles/Release.taskfile.yml
-
-tasks:
-  # Your repo-specific tasks here
-```
-
-**In target repository's `lefthook.yml`**:
-```yaml
-# Source commit validation from submodule
-commit-msg:
-  commands:
-    conventional-commit:
-      run: .catalyst/tooling/shared/scripts/validate-commit.sh {1}
-```
-
-### Per-Repository Customization Strategy
-
-The `.catalyst/tooling/repos/<repo-name>/` directories allow repository-specific overrides:
-
-- Custom build scripts that extend base tooling
-- Repo-specific Dockerfile templates
-- Language-specific release configurations
-
-**Example**: `kasa-exporter` might have Python-specific build steps, while `catalyst-ui` has npm/TypeScript builds.
-
-## Implementation Status
-
-### Completed
-- ✅ Conventional commit validation via lefthook
-- ✅ Manual semantic versioning (`build-release.sh`)
-- ✅ Task automation for releases
-- ✅ Release-please GitHub Actions integration
-- ✅ Multi-arch Docker build support
-- ✅ VERSION file tracking
-- ✅ CHANGELOG.md automation
-
-### Planned (from RELEASE_BUILD_IMPLEMENTATION_PLAN.md)
-- [ ] Documentation: `docs/RELEASE_PROCESS.md`
-- [ ] Documentation: `docs/SUBMODULE_USAGE.md`
-- [ ] Dockerfile templates in `.catalyst/tooling/shared/templates/`
-- [ ] GitHub workflow: `docker-publish.yml` for automated Docker builds on release
-- [ ] Per-repo branch strategy for customization
-- [ ] Backfill old repositories with new structure
-
-## Version Tracking
-
-- **Current Version**: Tracked in `VERSION` file (currently `0.1.0`)
-- **Version Format**: Semantic Versioning (MAJOR.MINOR.PATCH)
-- **Version Source of Truth**: `VERSION` file is canonical; `release-please-manifest.json` syncs from it
-
-## Integration with Catalyst Ecosystem
-
-### Metadata Schema
-
-This repo uses the `catalyst_repo.yaml` schema (now `.catalyst/repo.yaml`) which integrates with:
-
-- **@TheBranchDriftCatalyst**: GitHub profile page generator that scans for `.catalyst/repo.yaml` files
-- **Resume generator**: Future integration for portfolio/resume generation
-- **Workspace-level tooling**: Part of the broader `catalyst-devspace` monorepo ecosystem
-
-### Repository Metadata
-
-```yaml
-version: "0.1.1"                    # Schema version
-name: "git-repo-template"
-description: "Generic base git template repository"
-repo_url: "https://github.com/TheBranchDriftCatalyst/git-repo-template"
-status: "wip"                       # Options: active, archived, wip, experimental
-groups: ["templates", "meta"]
-```
-
-## CI/CD Workflows
-
-### Release-Please Workflow (`.github/workflows/release-please.yml`)
-
-**Trigger**: Push to `main` branch
-**Purpose**: Automated release PR creation and management
-
-**Permissions Required**:
-- `contents: write` - For creating releases and tags
-- `pull-requests: write` - For creating/updating release PRs
-
-### Future: Docker Publish Workflow
-
-**Trigger**: GitHub release published
-**Purpose**: Multi-arch Docker image builds to Docker Hub + GHCR
-
-**Required Secrets**:
-- `DOCKERHUB_USERNAME` - Docker Hub username
-- `DOCKERHUB_TOKEN` - Docker Hub access token
-- `GITHUB_TOKEN` - Auto-provided by GitHub Actions
-
-## Development Workflow
-
-### Typical Development Cycle
-
-1. Create feature branch: `git checkout -b feat/my-feature`
-2. Make changes and commit with conventional format: `git commit -m "feat: add new capability"`
-3. Push and create PR
-4. Merge to `main` → Release-please creates/updates release PR
-5. Review auto-generated CHANGELOG in release PR
-6. Merge release PR → Creates GitHub release automatically
-
-### Working on Build Tooling
-
-When modifying shared tooling in `.catalyst/tooling/shared/`:
-
-1. Changes affect ALL repositories using this as a submodule
-2. Test changes in a consuming repository before propagating
-3. Consider backward compatibility
-4. Update this CLAUDE.md if architecture changes
-
-### Submodule Update Strategy
-
-For repositories using this as a submodule:
-
-```bash
-# Update to latest version
-cd .catalyst
-git fetch origin
-git checkout main
-git pull
-
-# Return to parent repo
-cd ..
-git add .catalyst
-git commit -m "chore: update build tooling submodule"
-```
-
-## Language Agnostic Design
-
-This tooling is designed to work across:
-- **Python** projects (using Poetry, pip, etc.)
-- **TypeScript/JavaScript** projects (using npm, yarn, pnpm)
-- **Go** projects (using go modules)
-- **Other languages** with minimal adaptation
-
-The core scripts use bash and git, avoiding language-specific dependencies.
+## The reference app
+
+`backend/` (FastAPI, uv) and `frontend/` (React, Vite, yarn) exist to exercise
+the dev environment, not as product code. Keep them minimal.
+
+- **uv picks the interpreter, not nix.** `backend/.python-version` pins 3.12
+  and `requires-python` is only a floor. Do not add `python*` to `flake.nix`:
+  that produced two sources of truth, and uv ignored the flake's 3.12 to fetch
+  its own 3.14.
+- **yarn, never pnpm or npm, inside `frontend/`.** It was converted from pnpm;
+  `pnpm-lock.yaml` and `pnpm-workspace.yaml` were dropped deliberately. The
+  root tree also uses yarn, but the two are independent — never a shared
+  `yarn.lock` or `node_modules`.
+- **`Tiltfile` `live_update` triggers must name the lockfile.** The frontend
+  trigger lists `frontend/yarn.lock`; if that drifts from the real lockfile
+  name, a dependency change syncs source and silently leaves `node_modules`
+  stale inside the pod.
+- **The dev-loop `include()` is guarded on `os.path.exists`.** `.dev-loop/` is
+  gitignored, so an unguarded include breaks `tilt up` in a fresh clone.
+- **`allow_k8s_contexts` is a safety guardrail**, not configuration. Do not
+  widen it to a real cluster context.
+- Image names are still `git-repo-template-backend` / `git-repo-template-frontend`, matching
+  `image:` in `k8s/*.yaml`. Rename in both places or not at all.
+
+## Decisions already made
+
+Do not relitigate without being asked:
+
+- **Single `main`.** No variant or flavour branches.
+- **No submodule.** `.catalyst/` is deleted; don't bring it back.
+- **No copier / template subdirectory.** It duplicated every file it templated
+  — the same two-sources-of-truth problem as the heredocs in the old
+  `install.sh`. Use GitHub's template-repository feature.
+- **lefthook** only, never a second hook framework.
+- **commitlint** for commit messages, config in `package.json`.
+- **commit-and-tag-version** for version + changelog. Not release-please, not
+  git-cliff, not a bespoke release script.
+- **gitleaks** blocking on `pre-commit`.
+- **Both `task` and `just`**, as delegates only.
+- **Toolchain provisioned by nix**, which is why there is no "install X with
+  brew" documentation anywhere.
+
+## Conventions
+
+Commits must be conventional (`type(scope)?: description`), enforced by the
+`commit-msg` hook. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
+`test`, `chore`, `build`, `ci`, `revert`. `feat!:` signals a breaking change.
+
+Do not add AI attribution trailers to commit messages — two separate hooks
+reject them.
+
+Releases are local (`yarn release` then `yarn release:push`); CI only
+publishes the pushed tag.

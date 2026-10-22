@@ -1,0 +1,17 @@
+// Markdown lint rules. Mirrors catalyst-agentic-sdlc — keep aligned so
+// changes backport cleanly in either direction.
+//
+// Run by lefthook on pre-commit (auto-fixing via stage_fixed) and in CI
+// through `npm run lint:md`.
+{
+  "config": {
+    "default": true,
+    "MD013": false, // no line-length cap — prose wraps by meaning, not column
+    "MD024": { "siblings_only": true }, // repeated headings fine across sections
+    "MD032": false, // lists not always blank-line delimited
+    "MD033": false, // inline HTML is allowed
+    "MD040": false, // fenced blocks need not declare a language
+    "MD041": false // first line need not be a top-level heading
+  },
+  "ignores": ["node_modules/**", "**/node_modules/**"]
+}
