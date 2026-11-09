@@ -1,4 +1,4 @@
-FROM node:22-slim
+FROM node:22.23.4-slim
 
 # yarn, not pnpm: this repo standardises on yarn for app dependencies.
 # Node 22 ships corepack, so yarn needs no global npm install — and dropping
