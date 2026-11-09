@@ -4,10 +4,10 @@ version = "0.1.0"
 # A floor, not a pin. The exact interpreter is declared in .python-version,
 # which uv reads and will fetch if absent — nix deliberately does not provide
 # python, so there is only one source of truth for the version.
-requires-python = ">=3.12"
+requires-python = ">=3.15.2"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.30",
+    "fastapi>=0.162.2",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [tool.pytest.ini_options]
@@ -15,7 +15,7 @@ pythonpath = ["."]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.27",
-    "pytest>=8",
-    "ruff>=0.6",
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
 ]
